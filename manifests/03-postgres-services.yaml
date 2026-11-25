@@ -1,0 +1,61 @@
+# =============================================================================
+# manifests/03-postgres-services.yaml
+# Servicios de red para PostgreSQL: Headless, Read-Write (Primary) y Read-Only (Replicas)
+# =============================================================================
+
+# 1. Headless Service: Proporciona DNS estable individual por Pod
+# FQDN: postgresql-0.postgresql-headless.default.svc.cluster.local
+# FQDN: postgresql-1.postgresql-headless.default.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-headless
+  namespace: default
+  labels:
+    app: postgresql
+spec:
+  clusterIP: None
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgresql
+---
+# 2. Primary Service (Read-Write): Enruta el tráfico exclusivamente al Pod 0
+# Utiliza el label nativo inyectado automáticamente por el StatefulSet controller
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-primary
+  namespace: default
+  labels:
+    app: postgresql
+    role: primary
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgresql
+    statefulset.kubernetes.io/pod-name: postgresql-0
+---
+# 3. Replicas Service (Read-Only): Balancea consultas de lectura entre todos los pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-replicas
+  namespace: default
+  labels:
+    app: postgresql
+    role: replica
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgresql

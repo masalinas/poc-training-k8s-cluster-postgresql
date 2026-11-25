@@ -1,0 +1,1076 @@
+#!/usr/bin/env python3
+# =============================================================================
+# scripts/generate_html_pdf.py
+# Genera el documento HTML profesional y compila k8s-postgresql-statefulset.pdf
+# =============================================================================
+import os
+import subprocess
+import shutil
+
+WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DOCS_DIR = os.path.join(WORKSPACE_DIR, "docs")
+HTML_PATH = os.path.join(DOCS_DIR, "k8s-postgresql-statefulset.html")
+PDF_PATH = os.path.join(WORKSPACE_DIR, "k8s-postgresql-statefulset.pdf")
+
+HTML_CONTENT = r"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Guía Práctica de PostgreSQL en Kubernetes con StatefulSets</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+    @page {
+      size: A4 portrait;
+      margin: 18mm 14mm 18mm 14mm;
+      @bottom-right {
+        content: "Página " counter(page);
+        font-family: 'Inter', sans-serif;
+        font-size: 8pt;
+        color: #64748b;
+      }
+      @bottom-left {
+        content: "Curso Kubernetes - Cap. 2: PostgreSQL con StatefulSets y Operadores";
+        font-family: 'Inter', sans-serif;
+        font-size: 8pt;
+        color: #64748b;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 10pt;
+      line-height: 1.55;
+      color: #1e293b;
+      background-color: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Portada */
+    .cover {
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 90vh;
+      padding: 40px 20px;
+    }
+
+    .badge-k8s {
+      display: inline-block;
+      align-self: flex-start;
+      background-color: #e0f2fe;
+      color: #0369a1;
+      font-weight: 700;
+      font-size: 9pt;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+    }
+
+    .cover h1 {
+      font-size: 27pt;
+      font-weight: 800;
+      line-height: 1.15;
+      color: #0f172a;
+      margin: 0 0 16px 0;
+    }
+
+    .cover h1 span {
+      color: #326ce5; /* K8s Blue */
+    }
+
+    .cover .subtitle {
+      font-size: 13.5pt;
+      font-weight: 400;
+      color: #475569;
+      margin-bottom: 40px;
+      line-height: 1.45;
+    }
+
+    .cover-meta {
+      border-top: 2px solid #e2e8f0;
+      padding-top: 24px;
+      margin-top: 40px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .meta-item {
+      font-size: 9.5pt;
+    }
+
+    .meta-label {
+      color: #64748b;
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 8pt;
+      letter-spacing: 0.05em;
+    }
+
+    .meta-val {
+      color: #0f172a;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    /* Títulos */
+    h2 {
+      font-size: 15pt;
+      font-weight: 700;
+      color: #0f172a;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 6px;
+      margin-top: 28px;
+      margin-bottom: 14px;
+      page-break-after: avoid;
+    }
+
+    .section-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #ffffff;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-top: 30px;
+      margin-bottom: 20px;
+      page-break-after: avoid;
+    }
+
+    .section-banner h2 {
+      color: #ffffff;
+      border: none;
+      padding: 0;
+      margin: 0;
+      font-size: 15.5pt;
+    }
+
+    .section-banner p {
+      color: #93c5fd;
+      margin: 4px 0 0 0;
+      font-size: 9pt;
+    }
+
+    h3 {
+      font-size: 12pt;
+      font-weight: 600;
+      color: #1e3a8a;
+      margin-top: 20px;
+      margin-bottom: 8px;
+      page-break-after: avoid;
+    }
+
+    h4 {
+      font-size: 10.5pt;
+      font-weight: 600;
+      color: #334155;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      page-break-after: avoid;
+    }
+
+    p {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    ul, ol {
+      margin-top: 0;
+      margin-bottom: 12px;
+      padding-left: 22px;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+
+    /* Bloques de Código y Comandos */
+    pre {
+      background-color: #0f172a;
+      color: #f8fafc;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8pt;
+      line-height: 1.45;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border-left: 4px solid #38bdf8;
+      margin: 10px 0 14px 0;
+      page-break-inside: avoid;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      word-break: break-all !important;
+      overflow-wrap: anywhere !important;
+      overflow: visible !important;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8.5pt;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+
+    pre code {
+      background-color: transparent;
+      color: inherit;
+      padding: 0;
+      border: none;
+      font-size: inherit;
+      white-space: pre-wrap !important;
+      word-break: break-all !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    /* Cajas de Alerta */
+    .alert {
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 14px 0;
+      font-size: 9pt;
+      page-break-inside: avoid;
+      border-left: 4px solid;
+    }
+
+    .alert-warning {
+      background-color: #fffbeb;
+      border-color: #f59e0b;
+      color: #92400e;
+    }
+
+    .alert-important {
+      background-color: #fef2f2;
+      border-color: #ef4444;
+      color: #991b1b;
+    }
+
+    .alert-note {
+      background-color: #f0f9ff;
+      border-color: #0284c7;
+      color: #075985;
+    }
+
+    .alert-caution {
+      background-color: #fef2f2;
+      border-color: #dc2626;
+      color: #7f1d1d;
+    }
+
+    .alert-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      font-size: 8pt;
+      letter-spacing: 0.05em;
+    }
+
+    /* Tablas */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 8.8pt;
+      page-break-inside: avoid;
+    }
+
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f8fafc;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    tr:nth-child(even) td {
+      background-color: #f1f5f9;
+    }
+
+    .toc {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+      page-break-after: always;
+    }
+
+    .toc h2 {
+      margin-top: 0;
+      border-bottom: 2px solid #cbd5e1;
+      padding-bottom: 8px;
+      font-size: 14pt;
+    }
+
+    .toc ul {
+      list-style-type: none;
+      padding-left: 0;
+      margin-bottom: 0;
+    }
+
+    .toc > ul > li {
+      font-weight: 600;
+      margin-top: 10px;
+    }
+
+    .toc ul ul {
+      padding-left: 20px;
+      margin-top: 4px;
+    }
+
+    .toc ul ul li {
+      font-weight: 400;
+      font-size: 9pt;
+      margin-bottom: 3px;
+    }
+
+    .toc a {
+      color: #1e3a8a;
+      text-decoration: none;
+    }
+
+    .toc a:hover {
+      text-decoration: underline;
+    }
+
+    .page-break {
+      page-break-after: always;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PORTADA -->
+  <div class="cover">
+    <div class="badge-k8s">Kubernetes Avanzado &bull; Gestión de Cargas con Estado</div>
+    <h1>Despliegue Manual de <span>PostgreSQL</span> con StatefulSets</h1>
+    <div class="subtitle">
+      Arquitectura de Replicación Streaming Primario-Réplica, Anatomía de Red DNS Headless y el Dilema del Failover sin Operadores
+    </div>
+
+    <div class="cover-meta">
+      <div class="meta-item">
+        <div class="meta-label">Módulo / Curso</div>
+        <div class="meta-val">Capítulo 2: Estado y Bases de Datos en K8s</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Motor de Base de Datos</div>
+        <div class="meta-val">PostgreSQL 16 Alpine (WAL Streaming)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Primitivas Analizadas</div>
+        <div class="meta-val">StatefulSet, Headless Service, PVCs, InitContainers</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Entregable Oficial</div>
+        <div class="meta-val">k8s-postgresql-statefulset.pdf</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLA DE CONTENIDOS -->
+  <div class="toc" id="toc">
+    <h2>Tabla de Contenidos</h2>
+    <ul>
+      <li><a href="#sec1">1. Fundamentos y Arquitectura de Estado en Kubernetes</a>
+        <ul>
+          <li><a href="#sec1-1">1.1 El Contrato de Estado: Deployment vs StatefulSet</a></li>
+          <li><a href="#sec1-2">1.2 Diagrama de Topología y Flujo de Replicación</a></li>
+          <li><a href="#sec1-3">1.3 Matriz de Componentes del Clúster</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec2">2. Preparación del Almacenamiento Dinámico (StorageClass)</a>
+        <ul>
+          <li><a href="#sec2-1">2.1 El Problema del Almacenamiento en Clústeres Kubeadm</a></li>
+          <li><a href="#sec2-2">2.2 Despliegue de Rancher local-path-provisioner</a></li>
+          <li><a href="#sec2-3">2.3 Verificación de la StorageClass por Defecto</a></li>
+          <li><a href="#sec2-4">2.4 Ajuste de Tolerancias del Nodo Master (Control Plane)</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec3">3. Configuración Base y Gestión de Credenciales</a>
+        <ul>
+          <li><a href="#sec3-1">3.1 Secret de Autenticación para Superusuario y Replicador</a></li>
+          <li><a href="#sec3-2">3.2 ConfigMap con Scripts de Inicialización y pg_hba.conf</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec4">4. La Capa de Red: Headless Service y Servicios de Acceso</a>
+        <ul>
+          <li><a href="#sec4-1">4.1 Por qué un Servicio Estándar no Sirve: Headless Service (clusterIP: None)</a></li>
+          <li><a href="#sec4-2">4.2 Resolución DNS Individual por Pod en CoreDNS</a></li>
+          <li><a href="#sec4-3">4.3 Separación de Tráfico: Servicio Primario (RW) y Servicio Réplicas (RO)</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec5">5. Despliegue del StatefulSet y Mecánica del InitContainer</a>
+        <ul>
+          <li><a href="#sec5-1">5.1 Anatomía del StatefulSet: replicas, serviceName y OrderedReady</a></li>
+          <li><a href="#sec5-2">5.2 Aislamiento de Volúmenes con volumeClaimTemplates</a></li>
+          <li><a href="#sec5-3">5.3 Desmontando la "Magia": Lógica Interna del InitContainer</a></li>
+          <li><a href="#sec5-4">5.4 Despliegue Secuencial y Seguimiento del Arranque</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec6">6. Verificación Práctica de la Replicación Streaming</a>
+        <ul>
+          <li><a href="#sec6-1">6.1 Acceso Interactivo con psql al Pod Primario (postgresql-0)</a></li>
+          <li><a href="#sec6-2">6.2 Creación de Esquema y Datos de Prueba</a></li>
+          <li><a href="#sec6-3">6.3 Inspección del Catálogo Interno de Replicación (pg_stat_replication)</a></li>
+          <li><a href="#sec6-4">6.4 Validación de Lectura y Protección contra Escritura en postgresql-1</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec7">7. El Experimento del Caos: Limitaciones de Kubernetes Puro</a>
+        <ul>
+          <li><a href="#sec7-1">7.1 Simulación de Caída del Nodo Primario (postgresql-0)</a></li>
+          <li><a href="#sec7-2">7.2 El Comportamiento Real: Bloqueo de Escrituras y Réplica Estancada</a></li>
+          <li><a href="#sec7-3">7.3 El Peligro del Split-Brain por Promoción Manual no Coordinada</a></li>
+          <li><a href="#sec7-4">7.4 Por qué las Primitivas Nativas no Pueden Resolver el Failover</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec8">8. La Brecha hacia la Producción: Por Qué Usamos Operadores</a>
+        <ul>
+          <li><a href="#sec8-1">8.1 Matriz Comparativa: StatefulSet Manual vs. Operadores de Producción</a></li>
+          <li><a href="#sec8-2">8.2 Capacidades Esenciales de un Operador (CloudNativePG, Zalando, Crunchy)</a></li>
+        </ul>
+      </li>
+      <li><a href="#sec9">9. Resolución de Problemas Frecuentes (Troubleshooting)</a>
+        <ul>
+          <li><a href="#sec9-1">9.1 Error 1: PVCs en Estado Pending por Ausencia de StorageClass</a></li>
+          <li><a href="#sec9-2">9.2 Error 2: initdb directory exists but is not empty (lost+found)</a></li>
+          <li><a href="#sec9-3">9.3 Error 3: Fallo en pg_basebackup (pg_hba.conf)</a></li>
+          <li><a href="#sec9-4">9.4 Error 4: Permisos Denegados en Directorio de Datos (chown 999:999)</a></li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+
+  <!-- SECCIÓN 1 -->
+  <div class="section-banner" id="sec1">
+    <h2>1. Fundamentos y Arquitectura de Estado en Kubernetes</h2>
+    <p>El desafío del acoplamiento de identidad y datos en cargas transaccionales distribuidas</p>
+  </div>
+
+  <h3 id="sec1-1">1.1 El Contrato de Estado: Deployment vs StatefulSet</h3>
+  <p>
+    En la computación nativa en la nube, las aplicaciones web y APIs suelen ser <strong>apátridas</strong> (<em>stateless</em>). Para estas cargas, el controlador estándar es el <code>Deployment</code>, el cual asume que los Pods son fungibles, efímeros y reemplazables en cualquier instante sin orden establecido.
+  </p>
+  <p>
+    Sin embargo, bases de datos relacionales como <strong>PostgreSQL</strong> exigen un contrato de estado riguroso: un nodo específico asume el rol de escritura (Primario) mientras otros nodos actúan como réplicas de lectura (Standby), sincronizando su estado mediante streaming de registros Write-Ahead Log (WAL).
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Característica</th>
+        <th>Deployment (Stateless)</th>
+        <th>StatefulSet (Stateful)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Identidad de Red</strong></td>
+        <td>Efímera y aleatoria (<code>api-78f997df7-kq9pz</code>)</td>
+        <td>Fija y determinista (<code>postgresql-0</code>, <code>postgresql-1</code>)</td>
+      </tr>
+      <tr>
+        <td><strong>Orden de Despliegue</strong></td>
+        <td>Concurrente y sin dependencias</td>
+        <td>Secuencial estricto (0 &rarr; 1 &rarr; 2 ...)</td>
+      </tr>
+      <tr>
+        <td><strong>Almacenamiento (PVC)</strong></td>
+        <td>Volumen compartido o efímero (<code>emptyDir</code>)</td>
+        <td>1 PVC dedicado e independiente por réplica</td>
+      </tr>
+      <tr>
+        <td><strong>Re-vinculación de Volumen</strong></td>
+        <td>No garantizada tras recreación de Pod</td>
+        <td>El Pod 0 siempre recupera el PVC 0 tras reinicio</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 id="sec1-2">1.2 Diagrama de Topología y Flujo de Replicación</h3>
+  <p>A continuación se ilustra la topología completa que desplegaremos paso a paso:</p>
+
+  <pre><code>                                  APLICACIONES EXTERNAS / CLIENTES
+                                                 |
+                       +-------------------------+-------------------------+
+                       |                                                   |
+             Transacciones de Escritura                              Consultas de Solo Lectura
+             (INSERT, UPDATE, DELETE)                                (SELECT)
+                       |                                                   |
+                       v                                                   v
+           +-----------------------+                           +-----------------------+
+           |  postgresql-primary   |                           |  postgresql-replicas  |
+           |  (ClusterIP Service)  |                           |  (ClusterIP Service)  |
+           +-----------------------+                           +-----------------------+
+                       |                                                   |
+      Selector: pod-name=postgresql-0                             Selector: app=postgresql
+                       |                                                   |
+                       v                                                   v
++-----------------------------------------------------------------------------------------+
+|  STATEFULSET: postgresql (replicas: 2)                                                  |
+|                                                                                         |
+|  +-------------------------------------+       +-------------------------------------+  |
+|  | Pod: postgresql-0 (PRIMARY / RW)    |       | Pod: postgresql-1 (REPLICA / RO)    |  |
+|  | FQDN:                               |       | FQDN:                               |  |
+|  | postgresql-0.postgresql-headless    |       | postgresql-1.postgresql-headless    |  |
+|  |                                     |       |                                     |  |
+|  |  +-------------------------------+  |       |  +-------------------------------+  |  |
+|  |  | initContainer: init-postgres |  |       |  | initContainer: init-postgres |  |  |
+|  |  | - Detecta Ordinal: 0          |  |       |  | - Detecta Ordinal: 1          |  |  |
+|  |  | - Prepara permisos chown 700  |  |       |  | - Polling pg_isready a Pod 0  |  |  |
+|  |  | - Omite clonación (es máster) |  |       |  | - Clona datos: pg_basebackup  |  |  |
+|  |  +-------------------------------+  |       |  | - Genera standby.signal       |  |  |
+|  |                 |                   |       |  | - Escribe primary_conninfo    |  |  |
+|  |                 v                   |       |  +-------------------------------+  |  |
+|  |  +-------------------------------+  |       |                 |                   |  |
+|  |  | Container: postgresql         |  |       |                 v                   |  |
+|  |  | - Modo Read-Write             |  |       |  +-------------------------------+  |  |
+|  |  | - initdb crea 'replicator'    |  |&lt;======|==| Container: postgresql         |  |  |
+|  |  | - Emite WALs por streaming    |  |  WAL  |  | - Modo Hot-Standby (RO)       |  |  |
+|  |  +-------------------------------+  | Stream|  | - Aplica WALs en tiempo real  |  |  |
+|  +-----------------+-------------------+       +-----------------+-------------------+  |
++--------------------+---------------------------------------------+----------------------+
+                     |                                             |
+       volumeClaimTemplates: 1Gi                     volumeClaimTemplates: 1Gi
+                     |                                             |
+                     v                                             v
+        +-------------------------+                   +-------------------------+
+        | PVC:                    |                   | PVC:                    |
+        | postgresql-data-        |                   | postgresql-data-        |
+        | postgresql-0            |                   | postgresql-1            |
+        +-------------------------+                   +-------------------------+</code></pre>
+
+  <h3 id="sec1-3">1.3 Matriz de Componentes del Clúster</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Recurso Kubernetes</th>
+        <th>Nombre</th>
+        <th>Namespace</th>
+        <th>Propósito Pedagógico</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>StorageClass</strong></td>
+        <td><code>local-path</code></td>
+        <td>Clúster</td>
+        <td>Aprovisionamiento dinámico local sobre el disco del nodo físico.</td>
+      </tr>
+      <tr>
+        <td><strong>Secret</strong></td>
+        <td><code>postgres-credentials</code></td>
+        <td><code>default</code></td>
+        <td>Contraseñas seguras para <code>postgres</code> y <code>replicator</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>ConfigMap</strong></td>
+        <td><code>postgres-config</code></td>
+        <td><code>default</code></td>
+        <td>Scripts de inicialización SQL y reglas de autorización en <code>pg_hba.conf</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Service (Headless)</strong></td>
+        <td><code>postgresql-headless</code></td>
+        <td><code>default</code></td>
+        <td><code>clusterIP: None</code>. Enlaces DNS directos a Pods en CoreDNS.</td>
+      </tr>
+      <tr>
+        <td><strong>Service (ClusterIP)</strong></td>
+        <td><code>postgresql-primary</code></td>
+        <td><code>default</code></td>
+        <td>Enrutamiento exclusivo de escrituras hacia <code>postgresql-0</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Service (ClusterIP)</strong></td>
+        <td><code>postgresql-replicas</code></td>
+        <td><code>default</code></td>
+        <td>Enrutamiento balanceado para consultas de lectura en todo el clúster.</td>
+      </tr>
+      <tr>
+        <td><strong>StatefulSet</strong></td>
+        <td><code>postgresql</code></td>
+        <td><code>default</code></td>
+        <td>Orquestación secuencial, initContainers condicionales y PVCs dinámicos.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- SECCIÓN 2 -->
+  <div class="section-banner" id="sec2">
+    <h2>2. Preparación del Almacenamiento Dinámico (StorageClass)</h2>
+    <p>Habilitando la provisión automática de volúmenes persistentes en clústeres locales Kubeadm</p>
+  </div>
+
+  <h3 id="sec2-1">2.1 El Problema del Almacenamiento en Clústeres Kubeadm</h3>
+  <p>
+    En clústeres montados manualmente con Kubeadm, Kubernetes no cuenta con un proveedor de almacenamiento CSI preinstalado. Si se despliega un <code>StatefulSet</code> con <code>volumeClaimTemplates</code> sin una <code>StorageClass</code> predeterminada, los PVCs quedarán indefinidamente congelados en estado <code>Pending</code>.
+  </p>
+
+  <div class="alert alert-warning">
+    <div class="alert-title">Alerta de Infraestructura</div>
+    Sin un StorageClass dinámico, Kubernetes emitirá el evento: <em>"waiting for a volume to be created, either by dynamic provisioning or by manually creating a PersistentVolume"</em>.
+  </div>
+
+  <h3 id="sec2-2">2.2 Despliegue de Rancher local-path-provisioner</h3>
+  <p>Aplicamos el controlador oficial ligero que mapea directorios de disco local en <code>/opt/local-path-provisioner</code>:</p>
+
+  <pre><code>kubectl apply -f manifests/00-local-path-storage.yaml</code></pre>
+
+  <p><strong>Salida esperada:</strong></p>
+  <pre><code>namespace/local-path-storage created
+serviceaccount/local-path-provisioner-service-account created
+clusterrole.rbac.authorization.k8s.io/local-path-provisioner-role created
+clusterrolebinding.rbac.authorization.k8s.io/local-path-provisioner-bind created
+configmap/local-path-config created
+deployment.apps/local-path-provisioner created
+storageclass.storage.k8s.io/local-path created</code></pre>
+
+  <h3 id="sec2-3">2.3 Verificación de la StorageClass por Defecto</h3>
+  <pre><code>kubectl get storageclass</code></pre>
+  <pre><code>NAME                   PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+local-path (default)   rancher.io/local-path   Delete          WaitForFirstConsumer   false                  45s</code></pre>
+
+  <h3 id="sec2-4">2.4 Ajuste de Tolerancias del Nodo Master (Control Plane)</h3>
+  <p>Para permitir que el clúster de dos nodos distribuya las réplicas en diferentes máquinas virtuales, retiramos el taint de control plane del nodo master:</p>
+  <pre><code>kubectl taint nodes k8s-master node-role.kubernetes.io/control-plane:NoSchedule-</code></pre>
+  <pre><code>node/k8s-master untainted</code></pre>
+
+  <!-- SECCIÓN 3 -->
+  <div class="section-banner" id="sec3">
+    <h2>3. Configuración Base y Gestión de Credenciales</h2>
+    <p>Aprovisionamiento de secretos de autenticación y scripts de inicialización SQL</p>
+  </div>
+
+  <h3 id="sec3-1">3.1 Secret de Autenticación para Superusuario y Replicador</h3>
+  <p>Aplicamos el archivo de credenciales seguras para el motor de base de datos:</p>
+  <pre><code>kubectl apply -f manifests/01-postgres-secret.yaml</code></pre>
+  <pre><code>secret/postgres-credentials created</code></pre>
+
+  <h3 id="sec3-2">3.2 ConfigMap con Scripts de Inicialización y pg_hba.conf</h3>
+  <p>El ConfigMap contiene el script ejecutado por el entrypoint en <code>/docker-entrypoint-initdb.d/</code> para aprovisionar el rol <code>REPLICATION</code>:</p>
+  <pre><code>kubectl apply -f manifests/02-postgres-configmap.yaml</code></pre>
+  <pre><code>configmap/postgres-config created</code></pre>
+
+  <!-- SECCIÓN 4 -->
+  <div class="section-banner" id="sec4">
+    <h2>4. La Capa de Red: Headless Service y Servicios de Acceso</h2>
+    <p>Resolución DNS canónica por Pod en CoreDNS y desacoplamiento de tráfico RW / RO</p>
+  </div>
+
+  <h3 id="sec4-1">4.1 Por qué un Servicio Estándar no Sirve: Headless Service (clusterIP: None)</h3>
+  <p>
+    Un servicio <code>ClusterIP</code> estándar crea una IP virtual balanceada mediante <code>iptables</code>. La réplica de PostgreSQL necesita conectarse <strong>específicamente</strong> al Pod primario (<code>postgresql-0</code>), por lo que un balanceador aleatorio provocaría fallos de replicación. Al utilizar <code>clusterIP: None</code>, CoreDNS genera registros DNS directos hacia las IPs de cada Pod.
+  </p>
+
+  <h3 id="sec4-2">4.2 Resolución DNS Individual por Pod en CoreDNS</h3>
+  <p>Formato de resolución generado automáticamente:</p>
+  <ul>
+    <li><code>postgresql-0.postgresql-headless.default.svc.cluster.local</code> &rarr; IP directa del Pod 0</li>
+    <li><code>postgresql-1.postgresql-headless.default.svc.cluster.local</code> &rarr; IP directa del Pod 1</li>
+  </ul>
+
+  <h3 id="sec4-3">4.3 Separación de Tráfico: Servicio Primario (RW) y Servicio Réplicas (RO)</h3>
+  <pre><code>kubectl apply -f manifests/03-postgres-services.yaml</code></pre>
+  <pre><code>service/postgresql-headless created
+service/postgresql-primary created
+service/postgresql-replicas created</code></pre>
+
+  <pre><code>kubectl get svc -l app=postgresql</code></pre>
+  <pre><code>NAME                  TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+postgresql-headless   ClusterIP   None            &lt;none&gt;        5432/TCP   12s
+postgresql-primary    ClusterIP   10.98.140.210   &lt;none&gt;        5432/TCP   12s
+postgresql-replicas   ClusterIP   10.104.75.12    &lt;none&gt;        5432/TCP   12s</code></pre>
+
+  <!-- SECCIÓN 5 -->
+  <div class="section-banner" id="sec5">
+    <h2>5. Despliegue del StatefulSet y Mecánica del InitContainer</h2>
+    <p>Desmontando la magia: Bootstrap condicional con pg_basebackup y standby.signal</p>
+  </div>
+
+  <h3 id="sec5-1">5.1 Anatomía del StatefulSet: replicas, serviceName y OrderedReady</h3>
+  <p>
+    El StatefulSet asegura el arranque secuencial estricto. El Pod 1 no inicia hasta que el Pod 0 haya superado satisfactoriamente sus sondas de preparación (<code>readinessProbe</code>).
+  </p>
+
+  <h3 id="sec5-2">5.2 Aislamiento de Volúmenes con volumeClaimTemplates</h3>
+  <p>
+    Cada réplica recibe un disco independiente de 1 GiB vinculado a la StorageClass <code>local-path</code>.
+  </p>
+
+  <h3 id="sec5-3">5.3 Desmontando la "Magia": Lógica Interna del InitContainer</h3>
+  <p>El contenedor de inicialización evalúa el ordinal del Pod:</p>
+  <pre><code>ORDINAL=${HOSTNAME##*-}
+if [ "$ORDINAL" -eq 0 ]; then
+  # Nodo Primario: Asegurar permisos chmod 700 y permitir que initdb cree la base
+  mkdir -p "$TARGET_DIR" && chmod 700 "$TARGET_DIR"
+else
+  # Nodo Réplica: Esperar al primario y clonar con pg_basebackup
+  until pg_isready -h postgresql-0.postgresql-headless -p 5432 -U postgres; do sleep 2; done
+  if [ ! -s "$TARGET_DIR/PG_VERSION" ]; then
+    pg_basebackup -h postgresql-0.postgresql-headless -p 5432 -U "$REPLICATION_USER" -D "$TARGET_DIR" -Fp -Xs -R -v
+  fi
+fi</code></pre>
+
+  <h3 id="sec5-4">5.4 Despliegue Secuencial y Seguimiento del Arranque</h3>
+  <pre><code>kubectl apply -f manifests/04-postgres-statefulset.yaml</code></pre>
+  <pre><code>statefulset.apps/postgresql created</code></pre>
+
+  <p>Monitoreo del arranque:</p>
+  <pre><code>kubectl get pods -l app=postgresql -w</code></pre>
+  <pre><code>NAME           READY   STATUS     RESTARTS   AGE
+postgresql-0   0/1     Init:0/1   0          2s
+postgresql-0   1/1     Running    0          21s
+postgresql-1   0/1     Init:0/1   0          3s
+postgresql-1   1/1     Running    0          16s</code></pre>
+
+  <!-- SECCIÓN 6 -->
+  <div class="section-banner" id="sec6">
+    <h2>6. Verificación Práctica de la Replicación Streaming</h2>
+    <p>Comprobación de replicación WAL en tiempo real y protección de lectura estricta</p>
+  </div>
+
+  <h3 id="sec6-1">6.1 Acceso Interactivo con psql al Pod Primario (postgresql-0)</h3>
+  <pre><code>kubectl exec -it postgresql-0 -- psql -U postgres</code></pre>
+
+  <h3 id="sec6-2">6.2 Creación de Esquema y Datos de Prueba</h3>
+  <pre><code>CREATE TABLE estudiantes_k8s (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    modulo VARCHAR(100) NOT NULL,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO estudiantes_k8s (nombre, modulo) VALUES
+    ('Miguel Serrano', 'Kubernetes StatefulSets'),
+    ('Laura Gomez', 'Headless Services y DNS'),
+    ('Carlos Fernandez', 'Arquitectura de Operadores');</code></pre>
+
+  <h3 id="sec6-3">6.3 Inspección del Catálogo Interno de Replicación (pg_stat_replication)</h3>
+  <pre><code>SELECT application_name, client_addr, state, sync_state, replay_lag FROM pg_stat_replication;</code></pre>
+  <pre><code> application_name | client_addr  |   state   | sync_state | replay_lag 
+------------------+--------------+-----------+------------+------------
+ walreceiver      | 10.244.1.65  | streaming | async      | 00:00:00
+(1 row)</code></pre>
+
+  <h3 id="sec6-4">6.4 Validación de Lectura y Protección contra Escritura en postgresql-1</h3>
+  <p>Conectamos a la réplica para verificar la disponibilidad de datos y el bloqueo de escritura:</p>
+  <pre><code>kubectl exec -it postgresql-1 -- psql -U postgres -c "SELECT * FROM estudiantes_k8s;"</code></pre>
+  <pre><code> id |      nombre      |           modulo           |         creado_en          
+----+------------------+----------------------------+----------------------------
+  1 | Miguel Serrano   | Kubernetes StatefulSets    | 2026-11-25 15:10:20.123456
+  2 | Laura Gomez      | Headless Services y DNS    | 2026-11-25 15:10:20.128765
+  3 | Carlos Fernandez | Arquitectura de Operadores | 2026-11-25 15:10:20.131234
+(3 rows)</code></pre>
+
+  <pre><code>kubectl exec -it postgresql-1 -- psql -U postgres -c "INSERT INTO estudiantes_k8s (nombre, modulo) VALUES ('Intruso', 'Test');"</code></pre>
+  <pre><code>ERROR: cannot execute INSERT in a read-only transaction</code></pre>
+
+  <!-- SECCIÓN 7 -->
+  <div class="section-banner" id="sec7">
+    <h2>7. El Experimento del Caos: Limitaciones de Kubernetes Puro</h2>
+    <p>Demostración empírica de la ausencia de failover nativo y el peligro del split-brain</p>
+  </div>
+
+  <h3 id="sec7-1">7.1 Simulación de Caída del Nodo Primario (postgresql-0)</h3>
+  <pre><code>kubectl delete pod postgresql-0 --now</code></pre>
+
+  <h3 id="sec7-2">7.2 El Comportamiento Real: Bloqueo de Escrituras y Réplica Estancada</h3>
+  <p>
+    Al intentar escribir mediante el servicio primario, las peticiones fallan inmediatamente con <code>Connection refused</code>. Al consultar a <code>postgresql-1</code>:
+  </p>
+  <pre><code>kubectl exec -it postgresql-1 -- psql -U postgres -c "SELECT pg_is_in_recovery();"</code></pre>
+  <pre><code> pg_is_in_recovery 
+-------------------
+ t
+(1 row)</code></pre>
+  <p>
+    La réplica devuelve <code>t</code> (true). <strong>Kubernetes no la asciende de forma automática</strong>. K8s desconoce la semántica interna de PostgreSQL y se limita a intentar recrear el Pod caído.
+  </p>
+
+  <h3 id="sec7-3">7.3 El Peligro del Split-Brain por Promoción Manual no Coordinada</h3>
+  <p>
+    Si un operador ejecuta manualmente <code>SELECT pg_promote();</code> en <code>postgresql-1</code> sin aislar previamente el clúster, y más tarde el nodo primario original vuelve a levantarse, <strong>ambas instancias aceptarán escrituras independientes</strong>. Sus transacciones divergirán irremediablemente, provocando un escenario de <strong>Split-Brain</strong> que destruye la coherencia de datos del negocio.
+  </p>
+
+  <h3 id="sec7-4">7.4 Por qué las Primitivas Nativas no Pueden Resolver el Failover</h3>
+  <div class="alert alert-important">
+    <div class="alert-title">Conclusión de Sistemas Distribuidos</div>
+    El failover automático seguro requiere tres pilares que Kubernetes puro no provee: <strong>Detección de fallo confiable</strong>, <strong>Elección de líder por quórum (consenso)</strong> y <strong>Cercado forzado (Fencing)</strong> del nodo caído para impedir escrituras residuales.
+  </div>
+
+  <!-- SECCIÓN 8 -->
+  <div class="section-banner" id="sec8">
+    <h2>8. La Brecha hacia la Producción: Por Qué Usamos Operadores</h2>
+    <p>Por qué los Operadores de bases de datos son indispensables en producción</p>
+  </div>
+
+  <h3 id="sec8-1">8.1 Matriz Comparativa: StatefulSet Manual vs. Operadores de Producción</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Capacidad Requerida</th>
+        <th>StatefulSet Manual</th>
+        <th>Operador (CloudNativePG / Zalando / Crunchy)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Failover Automático</strong></td>
+        <td>No existe (Manual)</td>
+        <td>Automático sub-segundo con elección de líder por consenso</td>
+      </tr>
+      <tr>
+        <td><strong>Prevención de Split-Brain</strong></td>
+        <td>Ninguna (Alto riesgo)</td>
+        <td>Garantizado mediante Fencing y quorum distribuido</td>
+      </tr>
+      <tr>
+        <td><strong>Backups y PITR</strong></td>
+        <td>Scripts frágiles</td>
+        <td>Integración nativa Barman/WAL-G a S3/GCS/MinIO</td>
+      </tr>
+      <tr>
+        <td><strong>Rolling Updates</strong></td>
+        <td>Downtime transaccional</td>
+        <td>Switchover planificado con cero caída de servicio</td>
+      </tr>
+      <tr>
+        <td><strong>Pool de Conexiones</strong></td>
+        <td>Despliegue manual</td>
+        <td>PgBouncer integrado y autogestionado</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 id="sec8-2">8.2 Capacidades Esenciales de un Operador (CloudNativePG, Zalando, Crunchy)</h3>
+  <p>
+    Un Operador de Kubernetes es un controlador inteligente en Go que emula la labor continua de un DBA experto, evaluando el catálogo de PostgreSQL cada segundo para orquestar la conmutación por error en milisegundos con cero pérdida de datos (RPO=0).
+  </p>
+
+  <!-- SECCIÓN 9 -->
+  <div class="section-banner" id="sec9">
+    <h2>9. Resolución de Problemas Frecuentes (Troubleshooting)</h2>
+    <p>Diagnóstico y solución de incidentes típicos en despliegues con estado</p>
+  </div>
+
+  <h3 id="sec9-1">9.1 Error 1: PVCs en Estado Pending por Ausencia de StorageClass</h3>
+  <p><strong>Causa:</strong> No existe ningún StorageClass predeterminado en el clúster Kubeadm.</p>
+  <p><strong>Solución:</strong> Aplicar <code>manifests/00-local-path-storage.yaml</code> y validar con <code>kubectl get sc</code>.</p>
+
+  <h3 id="sec9-2">9.2 Error 2: initdb directory exists but is not empty (lost+found)</h3>
+  <p><strong>Causa:</strong> El sistema de archivos Ext4 genera la carpeta del sistema <code>lost+found</code> en la raíz del volumen montado.</p>
+  <p><strong>Solución:</strong> Definir <code>PGDATA: /var/lib/postgresql/data/pgdata</code> para aislar el clúster en un subdirectorio limpio.</p>
+
+  <h3 id="sec9-3">9.3 Error 3: Fallo en pg_basebackup (pg_hba.conf)</h3>
+  <p><strong>Causa:</strong> <code>pg_hba.conf</code> rechaza las conexiones de la subred del clúster.</p>
+  <p><strong>Solución:</strong> Asegurar que <code>pg_hba.conf</code> autorice conexiones desde <code>10.244.0.0/16</code> para el usuario <code>replicator</code>.</p>
+
+  <h3 id="sec9-4">9.4 Error 4: Permisos Denegados en Directorio de Datos (chown 999:999)</h3>
+  <p><strong>Causa:</strong> El volumen montado pertenece a <code>root:root</code> (UID 0) mientras PostgreSQL ejecuta como UID 999.</p>
+  <p><strong>Solución:</strong> Ejecutar <code>chmod 700 "$TARGET_DIR"</code> en el <code>initContainer</code> antes de iniciar PostgreSQL.</p>
+
+</body>
+</html>
+"""
+
+# Estructura jerárquica de marcadores (Document Outlines) para el panel lateral del PDF
+OUTLINE_STRUCTURE = [
+    {
+        "title": "Portada",
+        "page": 0
+    },
+    {
+        "title": "Tabla de Contenidos",
+        "id": "toc"
+    },
+    {
+        "title": "1. Fundamentos y Arquitectura de Estado en Kubernetes",
+        "id": "sec1",
+        "children": [
+            {"title": "1.1 El Contrato de Estado: Deployment vs StatefulSet", "id": "sec1-1"},
+            {"title": "1.2 Diagrama de Topología y Flujo de Replicación", "id": "sec1-2"},
+            {"title": "1.3 Matriz de Componentes del Clúster", "id": "sec1-3"}
+        ]
+    },
+    {
+        "title": "2. Preparación del Almacenamiento Dinámico (StorageClass)",
+        "id": "sec2",
+        "children": [
+            {"title": "2.1 El Problema del Almacenamiento en Clústeres Kubeadm", "id": "sec2-1"},
+            {"title": "2.2 Despliegue de Rancher local-path-provisioner", "id": "sec2-2"},
+            {"title": "2.3 Verificación de la StorageClass por Defecto", "id": "sec2-3"},
+            {"title": "2.4 Ajuste de Tolerancias del Nodo Master (Control Plane)", "id": "sec2-4"}
+        ]
+    },
+    {
+        "title": "3. Configuración Base y Gestión de Credenciales",
+        "id": "sec3",
+        "children": [
+            {"title": "3.1 Secret de Autenticación para Superusuario y Replicador", "id": "sec3-1"},
+            {"title": "3.2 ConfigMap con Scripts de Inicialización y pg_hba.conf", "id": "sec3-2"}
+        ]
+    },
+    {
+        "title": "4. La Capa de Red: Headless Service y Servicios de Acceso",
+        "id": "sec4",
+        "children": [
+            {"title": "4.1 Por qué un Servicio Estándar no Sirve: Headless Service (clusterIP: None)", "id": "sec4-1"},
+            {"title": "4.2 Resolución DNS Individual por Pod en CoreDNS", "id": "sec4-2"},
+            {"title": "4.3 Separación de Tráfico: Servicio Primario (RW) y Servicio Réplicas (RO)", "id": "sec4-3"}
+        ]
+    },
+    {
+        "title": "5. Despliegue del StatefulSet y Mecánica del InitContainer",
+        "id": "sec5",
+        "children": [
+            {"title": "5.1 Anatomía del StatefulSet: replicas, serviceName y OrderedReady", "id": "sec5-1"},
+            {"title": "5.2 Aislamiento de Volúmenes con volumeClaimTemplates", "id": "sec5-2"},
+            {"title": "5.3 Desmontando la \"Magia\": Lógica Interna del InitContainer", "id": "sec5-3"},
+            {"title": "5.4 Despliegue Secuencial y Seguimiento del Arranque", "id": "sec5-4"}
+        ]
+    },
+    {
+        "title": "6. Verificación Práctica de la Replicación Streaming",
+        "id": "sec6",
+        "children": [
+            {"title": "6.1 Acceso Interactivo con psql al Pod Primario (postgresql-0)", "id": "sec6-1"},
+            {"title": "6.2 Creación de Esquema y Datos de Prueba", "id": "sec6-2"},
+            {"title": "6.3 Inspección del Catálogo Interno de Replicación (pg_stat_replication)", "id": "sec6-3"},
+            {"title": "6.4 Validación de Lectura y Protección contra Escritura en postgresql-1", "id": "sec6-4"}
+        ]
+    },
+    {
+        "title": "7. El Experimento del Caos: Limitaciones de Kubernetes Puro",
+        "id": "sec7",
+        "children": [
+            {"title": "7.1 Simulación de Caída del Nodo Primario (postgresql-0)", "id": "sec7-1"},
+            {"title": "7.2 El Comportamiento Real: Bloqueo de Escrituras y Réplica Estancada", "id": "sec7-2"},
+            {"title": "7.3 El Peligro del Split-Brain por Promoción Manual no Coordinada", "id": "sec7-3"},
+            {"title": "7.4 Por qué las Primitivas Nativas no Pueden Resolver el Failover", "id": "sec7-4"}
+        ]
+    },
+    {
+        "title": "8. La Brecha hacia la Producción: Por Qué Usamos Operadores",
+        "id": "sec8",
+        "children": [
+            {"title": "8.1 Matriz Comparativa: StatefulSet Manual vs. Operadores de Producción", "id": "sec8-1"},
+            {"title": "8.2 Capacidades Esenciales de un Operador (CloudNativePG, Zalando, Crunchy)", "id": "sec8-2"}
+        ]
+    },
+    {
+        "title": "9. Resolución de Problemas Frecuentes (Troubleshooting)",
+        "id": "sec9",
+        "children": [
+            {"title": "9.1 Error 1: PVCs en Estado Pending por Ausencia de StorageClass", "id": "sec9-1"},
+            {"title": "9.2 Error 2: initdb directory exists but is not empty (lost+found)", "id": "sec9-2"},
+            {"title": "9.3 Error 3: Fallo en pg_basebackup (pg_hba.conf)", "id": "sec9-3"},
+            {"title": "9.4 Error 4: Permisos Denegados en Directorio de Datos (chown 999:999)", "id": "sec9-4"}
+        ]
+    }
+]
+
+def add_pdf_bookmarks(pdf_path):
+    """Inyecta el árbol de marcadores (Document Outlines) en el PDF usando pypdf."""
+    try:
+        import pypdf
+    except ImportError:
+        print("Aviso: 'pypdf' no está disponible. Omitiendo inyección de marcadores del panel lateral.")
+        return
+
+    print("Inyectando marcadores jerárquicos (Document Outlines) en el panel lateral del PDF...")
+    reader = pypdf.PdfReader(pdf_path)
+    writer = pypdf.PdfWriter()
+    writer.append(reader)
+
+    def get_page(target_id):
+        for key in (target_id, "/" + target_id):
+            if key in reader.named_destinations:
+                return reader.get_destination_page_number(reader.named_destinations[key])
+        return None
+
+    def add_items(items, parent=None):
+        for item in items:
+            p_num = item.get("page")
+            if p_num is None and "id" in item:
+                p_num = get_page(item["id"])
+            if p_num is not None:
+                node = writer.add_outline_item(item["title"], p_num, parent=parent)
+                if "children" in item:
+                    add_items(item["children"], parent=node)
+
+    add_items(OUTLINE_STRUCTURE)
+
+    temp_path = pdf_path + ".tmp"
+    with open(temp_path, "wb") as f:
+        writer.write(f)
+    os.replace(temp_path, pdf_path)
+
+
+def main():
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    with open(HTML_PATH, "w", encoding="utf-8") as f:
+        f.write(HTML_CONTENT)
+    print(f"HTML generado en: {HTML_PATH}")
+
+    chrome_candidates = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    ]
+    chrome_bin = None
+    for cand in chrome_candidates:
+        if os.path.exists(cand):
+            chrome_bin = cand
+            break
+        found = shutil.which(cand)
+        if found:
+            chrome_bin = found
+            break
+
+    if not chrome_bin:
+        chrome_bin = "google-chrome"
+    cmd = [
+        chrome_bin,
+        "--headless",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--allow-file-access-from-files",
+        "--enable-local-file-accesses",
+        "--user-data-dir=/tmp/chrome-user-data",
+        "--no-pdf-header-footer",
+        f"--print-to-pdf={PDF_PATH}",
+        f"file://{HTML_PATH}"
+    ]
+    print(f"Compilando PDF con Chrome headless a: {PDF_PATH}...")
+    if os.path.exists(PDF_PATH):
+        os.remove(PDF_PATH)
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if res.returncode == 0 and os.path.exists(PDF_PATH):
+        add_pdf_bookmarks(PDF_PATH)
+        size_kb = os.path.getsize(PDF_PATH) / 1024
+        print(f"¡Éxito! Archivo PDF generado con marcadores del panel lateral: {PDF_PATH} ({size_kb:.1f} KB)")
+    else:
+        print("Error generando PDF:")
+        print(res.stderr)
+        exit(1)
+
+if __name__ == "__main__":
+    main()

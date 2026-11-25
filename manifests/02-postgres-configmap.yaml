@@ -1,0 +1,49 @@
+# =============================================================================
+# manifests/02-postgres-configmap.yaml
+# Scripts de inicialización y configuración para PostgreSQL 16
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: default
+data:
+  # Script ejecutado por el entrypoint de PostgreSQL en /docker-entrypoint-initdb.d/
+  # Únicamente se ejecuta en el Primary (postgresql-0) en la primera inicialización
+  01-init-replication.sh: |-
+    #!/bin/bash
+    set -e
+    echo "==> [INITDB] Configurando usuario de replicación '$REPLICATION_USER'..."
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        DO \$\$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$REPLICATION_USER') THEN
+                CREATE ROLE $REPLICATION_USER WITH REPLICATION LOGIN ENCRYPTED PASSWORD '$REPLICATION_PASSWORD';
+            END IF;
+        END
+        \$\$;
+    EOSQL
+    echo "==> [INITDB] Usuario de replicación '$REPLICATION_USER' configurado con éxito."
+
+  # Configuración adicional de PostgreSQL 16 para replicación WAL streaming
+  custom-postgresql.conf: |-
+    # Conectividad
+    listen_addresses = '*'
+    port = 5432
+    
+    # Replicación WAL
+    wal_level = replica
+    max_wal_senders = 10
+    max_replication_slots = 10
+    wal_keep_size = 128MB
+    hot_standby = on
+    hot_standby_feedback = on
+
+  # Entradas adicionales de acceso para pg_hba.conf
+  custom-pg-hba.conf: |-
+    # Permitir conexiones locales y desde la subred del clúster K8s (Flannel 10.244.0.0/16)
+    host    all             all             127.0.0.1/32            scram-sha-256
+    host    all             all             ::1/128                 scram-sha-256
+    host    all             all             10.244.0.0/16           scram-sha-256
+    host    replication     replicator      10.244.0.0/16           scram-sha-256
+    host    all             all             all                     scram-sha-256

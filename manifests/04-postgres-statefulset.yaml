@@ -1,0 +1,199 @@
+# =============================================================================
+# manifests/04-postgres-statefulset.yaml
+# StatefulSet de PostgreSQL 16 con replicación streaming y bootstrap condicional
+# =============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgresql
+  namespace: default
+  labels:
+    app: postgresql
+spec:
+  serviceName: postgresql-headless
+  replicas: 2
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      # Tolerancia opcional para permitir que los pods corran también en el Master si se retira el taint
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      # Anti-afinidad suave para priorizar que los pods caigan en nodos físicos distintos
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - postgresql
+                topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: init-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+            - name: REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: REPLICATION_USER
+            - name: REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              HOSTNAME=$(hostname)
+              ORDINAL=${HOSTNAME##*-}
+              TARGET_DIR="/var/lib/postgresql/data/pgdata"
+              
+              echo "==> [INIT] Ejecutando bootstrap en Pod '$HOSTNAME' (Ordinal: $ORDINAL)..."
+              mkdir -p "$TARGET_DIR"
+              chmod 700 "$TARGET_DIR"
+
+              if [ "$ORDINAL" -eq 0 ]; then
+                echo "==> [INIT] Nodo Primary ($HOSTNAME). Verificando estructura de datos..."
+                if [ ! -s "$TARGET_DIR/PG_VERSION" ]; then
+                  echo "==> [INIT] Directorio virgen. El contenedor principal inicializará la base de datos."
+                else
+                  echo "==> [INIT] Directorio de datos existente detectado. Conservando estado previo."
+                fi
+              else
+                echo "==> [INIT] Nodo Replica ($HOSTNAME). Esperando a que postgresql-0 esté listo..."
+                until pg_isready -h postgresql-0.postgresql-headless -p 5432 -U postgres; do
+                  echo "==> [INIT] postgresql-0 no disponible aún. Reintentando en 2 segundos..."
+                  sleep 2
+                done
+                echo "==> [INIT] postgresql-0 está operativo."
+
+                if [ ! -s "$TARGET_DIR/PG_VERSION" ]; then
+                  echo "==> [INIT] Clonando catálogo inicial desde postgresql-0 con pg_basebackup..."
+                  PGPASSWORD="$REPLICATION_PASSWORD" pg_basebackup \
+                    -h postgresql-0.postgresql-headless \
+                    -p 5432 \
+                    -U "$REPLICATION_USER" \
+                    -D "$TARGET_DIR" \
+                    -Fp \
+                    -Xs \
+                    -R \
+                    -v
+                  chmod 700 "$TARGET_DIR"
+                  echo "==> [INIT] Clonación finalizada con éxito. standby.signal y primary_conninfo generados."
+                else
+                  echo "==> [INIT] Datos existentes encontrados en la réplica. No se requiere clonación."
+                fi
+              fi
+          volumeMounts:
+            - name: postgresql-data
+              mountPath: /var/lib/postgresql/data
+      containers:
+        - name: postgresql
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgresql
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+            - name: REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: REPLICATION_USER
+            - name: REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: REPLICATION_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          # Parámetros directos de PostgreSQL para replicación streaming
+          args:
+            - "-c"
+            - "listen_addresses=*"
+            - "-c"
+            - "wal_level=replica"
+            - "-c"
+            - "max_wal_senders=10"
+            - "-c"
+            - "max_replication_slots=10"
+            - "-c"
+            - "wal_keep_size=128MB"
+            - "-c"
+            - "hot_standby=on"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pg_isready -h 127.0.0.1 -p 5432 -U postgres"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pg_isready -h 127.0.0.1 -p 5432 -U postgres"
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          volumeMounts:
+            - name: postgresql-data
+              mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d/01-init-replication.sh
+              subPath: 01-init-replication.sh
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: postgres-config
+            defaultMode: 0755
+  # PVCs dinámicos asociados individualmente a cada réplica
+  volumeClaimTemplates:
+    - metadata:
+        name: postgresql-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 1Gi
