@@ -1,5 +1,11 @@
 # PoC Training: PostgreSQL en Kubernetes con StatefulSets
 
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.31-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![StorageClass](https://img.shields.io/badge/StorageClass-local--path-0891b2)](#2-preparación-del-almacenamiento-dinámico-storageclass)
+[![Curso](https://img.shields.io/badge/Curso-Cap%C3%ADtulo_2-0969da)](#)
+[![PDF](https://img.shields.io/badge/PDF-k8s--postgresql--statefulset.pdf-dc2626)](./k8s-postgresql-statefulset.pdf)
+
 > **Laboratorio Práctico y Guía Oficial:** Despliegue manual de un clúster PostgreSQL 16 (Primario/Réplica), anatomía interna de red en Kubernetes y demostración empírica de las limitaciones de la plataforma sin Operadores.
 
 ---
